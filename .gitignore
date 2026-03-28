@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+
+# VS Code / OS
+.vscode/
+.DS_Store
+*.swp
+
+# ROS 2 generated folders
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+
+# Python logs / outputs
+*.log
+logs/
+rl/logs/
+
+# Saved models
+models/
+rl/models/
+*.zip
+*.pkl
+
+# Temporary/generated robot files
+*.urdf
+*.tmp
+
+# Data / media if large or private
+datasets/
+media/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# TensorBoard / experiment outputs
+runs/
+tensorboard/
