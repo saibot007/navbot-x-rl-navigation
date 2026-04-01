@@ -1,6 +1,5 @@
 import math
 import time
-import tempfile
 import subprocess
 
 import gymnasium as gym
@@ -28,44 +27,46 @@ class NavBotEnv(gym.Env):
         # World / robot settings
         self.world_name = "empty_world"
         self.robot_name = "navbot_x"
-        self.xacro_path = "/home/atharva-sharma/NewStorage/projects/navbot-x/ros2_ws/src/navbot_x_description/urdf/navbot_x.urdf.xacro"
 
         # Spawn / reset settings
-        self.spawn_x = 0.0
+        self.spawn_x = -1.0
         self.spawn_y = 0.0
-        self.spawn_z = 0.2
+        self.spawn_z = 0.02
         self.spawn_yaw = 0.0
 
         # Goal settings
-        self.goal_x = 2.5
+        self.goal_x = 1.0
         self.goal_y = 0.0
-        self.goal_tolerance = 0.30
+        self.goal_tolerance = 0.15
 
         # Episode settings
-        self.max_steps = 300
+        self.max_steps = 250
         self.current_step = 0
+        self.episode_reward = 0.0
 
         # LiDAR / collision settings
         self.num_lidar_bins = 12
         self.scan_clip_max = 5.0
         self.collision_distance = 0.22
+        self.safe_distance = 0.50
 
         # Action settings
         self.max_linear = 0.25
         self.max_angular = 1.5
 
+        # Normalized action space for PPO
         self.action_space = spaces.Box(
-            low=np.array([0.0, -self.max_angular], dtype=np.float32),
-            high=np.array([self.max_linear, self.max_angular], dtype=np.float32),
+            low=np.array([0.0, -1.0], dtype=np.float32),
+            high=np.array([1.0, 1.0], dtype=np.float32),
             dtype=np.float32,
         )
 
         obs_low = np.array(
-            [0.0] * self.num_lidar_bins + [0.0, -math.pi, -5.0, -5.0],
+            [0.0] * self.num_lidar_bins + [0.0, -math.pi, -self.max_linear, -self.max_angular],
             dtype=np.float32,
         )
         obs_high = np.array(
-            [self.scan_clip_max] * self.num_lidar_bins + [100.0, math.pi, 5.0, 5.0],
+            [self.scan_clip_max] * self.num_lidar_bins + [100.0, math.pi, self.max_linear, self.max_angular],
             dtype=np.float32,
         )
 
@@ -84,8 +85,16 @@ class NavBotEnv(gym.Env):
         self.scan_msg = None
         self.odom_msg = None
 
-        # Reward shaping memory
+        # Reward / action memory
         self.prev_distance_to_goal = None
+        self.prev_angle_to_goal = None
+        self.prev_linear_x = 0.0
+        self.prev_angular_z = 0.0
+
+        # Odom reset reference
+        self.reset_odom_x = None
+        self.reset_odom_y = None
+        self.reset_odom_yaw = None
 
         self.node.get_logger().info("NavBotEnv initialized.")
 
@@ -110,7 +119,7 @@ class NavBotEnv(gym.Env):
             self.cmd_pub.publish(msg)
             self._spin_once(0.05)
 
-    def _wait_for_fresh_data(self, timeout=6.0):
+    def _wait_for_fresh_data(self, timeout=3.0):
         start = time.time()
         while time.time() - start < timeout:
             self._spin_once(0.1)
@@ -118,67 +127,12 @@ class NavBotEnv(gym.Env):
                 return True
         return False
 
-    def _delete_robot(self):
-        cmd = [
-            "gz", "service",
-            "-s", f"/world/{self.world_name}/remove",
-            "--reqtype", "gz.msgs.Entity",
-            "--reptype", "gz.msgs.Boolean",
-            "--timeout", "3000",
-            "--req", f'name: "{self.robot_name}", type: MODEL'
-        ]
-
-        result = subprocess.run(cmd, capture_output=True, text=True)
-
-        #print("\n[DELETE ROBOT CMD]")
-        #print("CMD:", " ".join(cmd))
-        #print("STDOUT:", result.stdout)
-        #print("STDERR:", result.stderr)
-
-        return result.returncode == 0
-
-    def _generate_temp_urdf(self):
-        result = subprocess.run(
-            ["xacro", self.xacro_path],
-            capture_output=True,
-            text=True
-        )
-
-        print("\n[XACRO TO URDF]")
-        print("STDOUT length:", len(result.stdout))
-        print("STDERR:", result.stderr)
-
-        if result.returncode != 0:
-            raise RuntimeError(f"xacro failed for {self.xacro_path}")
-
-        tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".urdf", delete=False)
-        tmp.write(result.stdout)
-        tmp.flush()
-        tmp.close()
-        return tmp.name
-
-    def _spawn_robot(self):
-        urdf_path = self._generate_temp_urdf()
-
-        cmd = [
-            "ros2", "run", "ros_gz_sim", "create",
-            "-world", self.world_name,
-            "-name", self.robot_name,
-            "-file", urdf_path,
-            "-x", str(self.spawn_x),
-            "-y", str(self.spawn_y),
-            "-z", str(self.spawn_z),
-            "-Y", str(self.spawn_yaw),
-        ]
-
-        result = subprocess.run(cmd, capture_output=True, text=True)
-
-        #print("\n[SPAWN ROBOT CMD]")
-        #print("CMD:", " ".join(cmd))
-        #print("STDOUT:", result.stdout)
-        #print("STDERR:", result.stderr)
-
-        return result.returncode == 0
+    def _yaw_to_quaternion(self, yaw):
+        qx = 0.0
+        qy = 0.0
+        qz = math.sin(yaw / 2.0)
+        qw = math.cos(yaw / 2.0)
+        return qx, qy, qz, qw
 
     def _yaw_from_quaternion(self, q):
         x = q.x
@@ -196,19 +150,80 @@ class NavBotEnv(gym.Env):
             angle += 2.0 * math.pi
         return angle
 
+    def _reset_pose(self):
+        qx, qy, qz, qw = self._yaw_to_quaternion(self.spawn_yaw)
+
+        cmd = [
+            "gz", "service",
+            "-s", f"/world/{self.world_name}/set_pose/blocking",
+            "--reqtype", "gz.msgs.Pose",
+            "--reptype", "gz.msgs.Boolean",
+            "--timeout", "3000",
+            "--req",
+            (
+                f'name: "{self.robot_name}" '
+                f'position {{ x: {self.spawn_x} y: {self.spawn_y} z: {self.spawn_z} }} '
+                f'orientation {{ x: {qx} y: {qy} z: {qz} w: {qw} }}'
+            )
+        ]
+
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+
+            print("[SET_POSE CMD]", " ".join(cmd))
+            print("[SET_POSE STDOUT]", result.stdout)
+            print("[SET_POSE STDERR]", result.stderr)
+
+            stdout = result.stdout.lower()
+            return result.returncode == 0 and ("data: true" in stdout or stdout.strip() == "")
+        except subprocess.TimeoutExpired:
+            print("[SET_POSE ERROR] timeout")
+            return False
+
     def _get_robot_pose(self):
         if self.odom_msg is None:
             return None
+
         pos = self.odom_msg.pose.pose.position
         ori = self.odom_msg.pose.pose.orientation
-        yaw = self._yaw_from_quaternion(ori)
-        return pos.x, pos.y, yaw
+        odom_yaw = self._yaw_from_quaternion(ori)
+
+        # Before reset reference captured, return raw odom
+        if self.reset_odom_x is None or self.reset_odom_y is None or self.reset_odom_yaw is None:
+            return pos.x, pos.y, odom_yaw
+
+        dx = pos.x - self.reset_odom_x
+        dy = pos.y - self.reset_odom_y
+        dyaw = self._normalize_angle(odom_yaw - self.reset_odom_yaw)
+
+        x = self.spawn_x + dx
+        y = self.spawn_y + dy
+        yaw = self._normalize_angle(self.spawn_yaw + dyaw)
+
+        return x, y, yaw
 
     def _get_robot_twist(self):
         if self.odom_msg is None:
             return 0.0, 0.0
+
         twist = self.odom_msg.twist.twist
-        return twist.linear.x, twist.angular.z
+        lin = float(twist.linear.x)
+        ang = float(twist.angular.z)
+
+        if abs(lin) < 1e-6:
+            lin = 0.0
+        if abs(ang) < 1e-6:
+            ang = 0.0
+
+        lin = float(np.clip(lin, -self.max_linear, self.max_linear))
+        ang = float(np.clip(ang, -self.max_angular, self.max_angular))
+
+        return lin, ang
 
     def _get_distance_to_goal(self):
         pose = self._get_robot_pose()
@@ -268,27 +283,44 @@ class NavBotEnv(gym.Env):
         super().reset(seed=seed)
 
         self.current_step = 0
+        self.episode_reward = 0.0
 
+        self._publish_zero_cmd()
+        time.sleep(0.2)
+        self._publish_zero_cmd()
+        time.sleep(0.2)
+
+        ok = self._reset_pose()
+        if not ok:
+            raise RuntimeError("Pose reset failed")
+
+        time.sleep(0.5)
+
+        self._publish_zero_cmd()
+        time.sleep(0.3)
         self._publish_zero_cmd()
         time.sleep(0.2)
 
         self._clear_cached_msgs()
 
-        self._delete_robot()
-        time.sleep(0.8)
+        if not self._wait_for_fresh_data(timeout=3.0):
+            raise RuntimeError("Pose reset worked but no fresh /scan or /odom arrived")
 
-        ok = self._spawn_robot()
-        if not ok:
-            raise RuntimeError("Failed to respawn robot during reset")
-
-        self._publish_zero_cmd()
-        time.sleep(1.0)
-
-        if not self._wait_for_fresh_data(timeout=6.0):
-            raise RuntimeError("Robot respawned but no fresh /scan or /odom arrived")
+        # Capture odom reference immediately after reset
+        raw_pos = self.odom_msg.pose.pose.position
+        raw_ori = self.odom_msg.pose.pose.orientation
+        self.reset_odom_x = raw_pos.x
+        self.reset_odom_y = raw_pos.y
+        self.reset_odom_yaw = self._yaw_from_quaternion(raw_ori)
 
         obs = self._get_observation()
+        pose = self._get_robot_pose()
+        print(f"[RESET ACTUAL POSE] {pose}")
+
         self.prev_distance_to_goal = self._get_distance_to_goal()
+        self.prev_angle_to_goal = abs(self._get_angle_to_goal())
+        self.prev_linear_x = 0.0
+        self.prev_angular_z = 0.0
 
         info = {}
         return obs, info
@@ -296,13 +328,32 @@ class NavBotEnv(gym.Env):
     def step(self, action):
         self.current_step += 1
 
-        linear_x = float(np.clip(action[0], 0.0, self.max_linear))
-        angular_z = float(np.clip(action[1], -self.max_angular, self.max_angular))
+        raw_forward = float(np.clip(action[0], 0.0, 1.0))
+        raw_turn = float(np.clip(action[1], -1.0, 1.0))
+
+        min_forward = 0.05
+        raw_linear_x = min_forward + (self.max_linear - min_forward) * raw_forward
+        raw_angular_z = self.max_angular * raw_turn
+
+        alpha_lin = 0.7
+        alpha_ang = 0.8
+
+        linear_x = alpha_lin * self.prev_linear_x + (1.0 - alpha_lin) * raw_linear_x
+        angular_z = alpha_ang * self.prev_angular_z + (1.0 - alpha_ang) * raw_angular_z
+
+        if raw_linear_x > 0.05 and linear_x < 0.03:
+            linear_x = 0.03
+
+        angular_change = abs(angular_z - self.prev_angular_z)
+        linear_change = abs(linear_x - self.prev_linear_x)
 
         cmd = Twist()
         cmd.linear.x = linear_x
         cmd.angular.z = angular_z
         self.cmd_pub.publish(cmd)
+
+        self.prev_linear_x = linear_x
+        self.prev_angular_z = angular_z
 
         for _ in range(3):
             self._spin_once(0.1)
@@ -316,33 +367,61 @@ class NavBotEnv(gym.Env):
         truncated = bool(self.current_step >= self.max_steps)
 
         current_dist = self._get_distance_to_goal()
+        current_angle = abs(self._get_angle_to_goal())
+        min_scan = float(np.min(self._process_scan()))
+
         progress = 0.0
         if self.prev_distance_to_goal is not None:
             progress = self.prev_distance_to_goal - current_dist
-        self.prev_distance_to_goal = current_dist
 
-        min_scan = float(np.min(self._process_scan()))
+        angle_improvement = 0.0
+        if self.prev_angle_to_goal is not None:
+            angle_improvement = self.prev_angle_to_goal - current_angle
+
+        self.prev_distance_to_goal = current_dist
+        self.prev_angle_to_goal = current_angle
 
         reward = 0.0
-        reward += 10.0 * progress
-        reward -= 0.01
-        reward -= 0.05 * abs(angular_z)
 
-        if min_scan < 0.40:
-            reward -= 0.10 * (0.40 - min_scan)
+        reward += 25.0 * progress
+        reward += 2.0 * angle_improvement
+
+        reward -= 0.01
+        reward -= 0.02 * abs(angular_z)
+        reward -= 0.04 * angular_change
+        reward -= 0.01 * linear_change
+        reward += 0.08 * linear_x
+
+        if min_scan < self.safe_distance:
+            reward -= 0.25 * (self.safe_distance - min_scan)
+
+        if linear_x < 0.03 and current_dist > self.goal_tolerance:
+            reward -= 0.08
 
         if goal_reached:
-            reward += 50.0
+            reward += 120.0
 
         if collision:
-            reward -= 50.0
+            reward -= 120.0
+
+        self.episode_reward += reward
 
         info = {
             "distance_to_goal": current_dist,
             "goal_reached": goal_reached,
             "collision": collision,
             "min_scan": min_scan,
+            "episode_step": self.current_step,
         }
+
+        if terminated or truncated:
+            info["episode"] = {
+                "r": float(self.episode_reward),
+                "l": int(self.current_step),
+                "success": int(goal_reached),
+                "collision": int(collision),
+            }
+            print(f"[EP END] step={self.current_step}, collision={collision}, goal={goal_reached}, truncated={truncated}")
 
         return obs, reward, terminated, truncated, info
 
