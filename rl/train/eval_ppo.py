@@ -5,7 +5,7 @@ from rl.env.navbot_env import NavBotEnv
 
 
 def main():
-    model_path = "rl/models/ppo_navbot_reward_v1"
+    model_path = "rl/models/ppo_navbot_curriculum_stage1"   
     n_eval_episodes = 10
 
     env = NavBotEnv()
@@ -37,11 +37,23 @@ def main():
         ep_len = 0
 
         while not (done or truncated):
-            action, _states = model.predict(obs, deterministic=True)
+            action, _states = model.predict(obs, deterministic=False)
             obs, reward, done, truncated, info = env.step(action)
 
             ep_reward += reward
             ep_len += 1
+
+            if ep == 0:
+                print(
+                    f"step={ep_len:03d} "
+                    f"raw_a0={float(action[0]):.4f} raw_a1={float(action[1]):.4f} "
+                    f"cmd_lin={info.get('cmd_linear_x', 0.0):.4f} "
+                    f"cmd_ang={info.get('cmd_angular_z', 0.0):.4f} "
+                    f"odom_lin={info.get('odom_linear_x', 0.0):.4f} "
+                    f"odom_ang={info.get('odom_angular_z', 0.0):.4f} "
+                    f"dist={info.get('distance_to_goal', 0.0):.4f} "
+                    f"angle={info.get('angle_to_goal', 0.0):.4f}"
+                )
 
         episode_rewards.append(ep_reward)
         episode_lengths.append(ep_len)

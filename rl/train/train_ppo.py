@@ -30,7 +30,7 @@ def main():
         device="cpu",
     )
 
-    model.learn(total_timesteps=20000)
+    model.learn(total_timesteps=50000)
     model.save("rl/models/ppo_navbot_curriculum_stage1")
 
     env.close()
