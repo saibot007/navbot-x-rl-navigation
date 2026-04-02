@@ -1,8 +1,8 @@
 # NavBot-X: Autonomous Robot Navigation using Reinforcement Learning
 
-NavBot-X is a robotics reinforcement learning project focused on autonomous mobile robot navigation in simulation. The system is built on **Ubuntu**, **ROS 2 Jazzy**, and **Gazebo Sim (`ros_gz`)**, with a custom **Gymnasium** environment and **PPO** training pipeline using **Stable-Baselines3**.
+NavBot-X is a robotics reinforcement learning project focused on autonomous mobile robot navigation in simulation. The system is built on **Ubuntu**, **ROS 2 Jazzy**, and **Gazebo Sim (`ros_gz`)**, with a custom **Gymnasium** environment and a **PPO** training pipeline using **Stable-Baselines3**.
 
-The project goal is to train a differential-drive robot to navigate toward a goal while avoiding obstacles using LiDAR-based perception and reinforcement learning.
+The project goal is to train a differential-drive robot to navigate toward a goal using LiDAR and odometry-based observations, while building a reusable robotics RL pipeline that can later scale toward more advanced simulation and Physical AI workflows.
 
 ---
 
@@ -11,70 +11,122 @@ The project goal is to train a differential-drive robot to navigate toward a goa
 This project combines:
 
 - robot modeling in ROS 2
-- Gazebo Sim world creation
+- Gazebo Sim world integration
 - differential-drive motion control
-- LiDAR and odometry integration
-- custom Gym-style RL environment design
-- PPO-based training for autonomous navigation
+- LiDAR and odometry sensing
+- custom Gymnasium RL environment design
+- PPO-based reinforcement learning for navigation
+- episodic reset and evaluation for multi-episode training
 
-The current system already supports full end-to-end interaction between simulation, sensing, action, episodic reset, and RL training.
+The current system supports full end-to-end interaction between simulation, sensing, control, reset, training, and evaluation.
 
 ---
 
 ## What Has Been Built
 
 ### Simulation and Robot Stack
-- Created the **NavBot-X** robot simulation pipeline
-- Built robot description package for ROS 2 Jazzy
-- Spawned robot successfully in **Gazebo Sim**
-- Added obstacle world for navigation testing
-- Integrated differential-drive control through `/cmd_vel`
-- Added LiDAR sensing through `/scan`
-- Added odometry through `/odom`
+- Built the **NavBot-X** robot simulation pipeline
+- Created a robot description package for **ROS 2 Jazzy**
+- Spawned the robot successfully in **Gazebo Sim**
+- Integrated differential-drive motion control through `/cmd_vel`
+- Integrated LiDAR sensing through `/scan`
+- Integrated odometry through `/odom`
+- Added a navigation test world with obstacles
 
-### RL Pipeline
-- Designed a custom **Gymnasium** environment
-- Built observation pipeline from:
-  - downsampled LiDAR data
-  - odom-derived goal distance
-  - goal heading information
-- Built action pipeline for robot velocity control
+### RL Environment
+- Designed a custom **Gymnasium** environment for navigation
+- Built an observation pipeline using:
+  - downsampled LiDAR readings
+  - goal distance
+  - goal heading
+  - robot motion feedback from odometry
+- Built a continuous action pipeline for linear and angular velocity control
 - Implemented reward shaping for navigation learning
-- Implemented episodic reset support
-- Integrated **PPO** using **Stable-Baselines3**
-- Verified PPO training loop can run across episodes
+- Implemented episodic reset logic
+- Solved the reset/odometry consistency problem by using:
+  - Gazebo pose reset
+  - relative odometry reference after each reset
 
-### Engineering Progress
-- Solved multiple ROS 2 + Gazebo integration issues
-- Debugged sensor bridging with `ros_gz_bridge`
-- Structured project for iterative robotics/RL development
-- Organized code for future internship-ready expansion
+### PPO Training Pipeline
+- Integrated **PPO** with **Stable-Baselines3**
+- Added environment validation with `check_env`
+- Added training and evaluation scripts
+- Added saved-model support for checkpointed experiments
+- Verified multi-episode PPO training works without hanging
+
+---
+
+## Major Engineering Milestone
+
+One of the biggest engineering blockers in this project was episodic reset reliability.
+
+Earlier approaches such as world reset and delete-respawn reset were unstable during long training runs. The current environment uses **Gazebo pose reset** together with a **relative odometry reference update** after every reset. This fixed the false goal-detection issue caused by accumulated odometry and made longer RL training runs feasible.
+
+This was the key infrastructure milestone that allowed the project to move from simulator debugging to actual policy learning.
 
 ---
 
 ## Current Status
 
-The **full RL pipeline skeleton is working end-to-end**:
+The project has now passed the initial “pipeline only” stage.
 
-- **Observation:** LiDAR + odom-derived goal information
-- **Action:** velocity commands
-- **Environment:** Gazebo obstacle world
-- **Reset:** episodic reset working
-- **Training loop:** PPO runs without hanging
+### Current working status
+- robot spawning works
+- `/cmd_vel` control works
+- `/scan` works
+- `/odom` works
+- episodic reset works
+- PPO training works
+- evaluation works
+- the robot can now reach the goal in a meaningful fraction of evaluation episodes on an easy fixed task
 
-### Current Meaning of This Stage
-This does **not** yet mean that NavBot-X has learned a strong final autonomous navigation policy.
+### First successful RL milestone
+After training PPO for **50,000 timesteps** on a fixed stage-0 navigation task, the evaluation reached:
 
-It means the project has reached the critical integration milestone where:
+- **Success rate:** `0.40`
+- **Collision rate:** `0.10`
+- **Truncation rate:** `0.50`
+- **Average reward:** `8.13`
+- **Average episode length:** `190.90`
 
-- the robot can move
-- the robot can sense
-- the environment can provide observations
-- the RL agent can act
-- episodes can restart
-- PPO can train on the environment
+This is the first clear sign that the learned policy is no longer only hesitating or timing out, and can now solve the simplified task with partial reliability.
 
-This is the foundation required before serious reward tuning, longer training, evaluation, and performance optimization.
+### What this does and does not mean
+This result means:
+
+- the robotics RL stack is genuinely working
+- the robot can learn a usable navigation policy on a simplified task
+- the project has moved beyond pure integration/debugging
+
+This does **not** yet mean:
+
+- robust obstacle navigation is solved
+- the navigation policy generalizes broadly
+- the project is finished
+- the system is sim-to-real ready
+
+At this stage, NavBot-X has achieved its **first successful fixed-task PPO navigation milestone**.
+
+---
+
+## Current Learning Setup
+
+The current RL environment includes:
+
+- custom continuous-action navigation control
+- LiDAR-based obstacle awareness
+- goal-distance and heading observations
+- smoothed velocity commands
+- repeated `/cmd_vel` publishing per RL step
+- reward shaping for:
+  - progress toward goal
+  - heading improvement
+  - goal-aligned forward motion
+  - obstacle clearance
+  - collision penalty
+  - success bonus
+
+The current training focus is to stabilize policy performance on the easy task and then gradually expand to randomized starts, harder geometry, and more realistic navigation scenarios.
 
 ---
 
@@ -103,6 +155,8 @@ navbot-x/
 │   │   ├── __init__.py
 │   │   ├── test_env.py            # Environment testing script
 │   │   └── train_ppo.py           # PPO training script
+│   ├── eval/
+│   │   └── eval_ppo.py            # PPO evaluation script
 │   ├── logs/                      # PPO / tensorboard logs
 │   └── models/                    # Saved models
 │
@@ -121,3 +175,4 @@ navbot-x/
 ├── media/
 ├── models/
 └── README.md
+```
