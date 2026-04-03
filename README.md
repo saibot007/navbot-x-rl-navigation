@@ -4,6 +4,8 @@ NavBot-X is a robotics reinforcement learning project focused on autonomous mobi
 
 The project goal is to train a differential-drive robot to navigate toward a goal using LiDAR and odometry-based observations, while building a reusable robotics RL pipeline that can later scale toward more advanced simulation and Physical AI workflows.
 
+This project now serves as a completed foundational milestone in my robotics reinforcement learning journey, with the next phase progressing toward Isaac Sim, Isaac Lab, and Omniverse-based Physical AI workflows.
+
 ---
 
 ## Project Overview
@@ -68,7 +70,7 @@ This was the key infrastructure milestone that allowed the project to move from 
 
 ## Current Status
 
-NavBot-X has now moved beyond the initial pipeline-validation stage and achieved a strong learning milestone on the easy randomized navigation task.
+NavBot-X has successfully moved beyond initial simulator integration and infrastructure debugging, and has reached a strong reinforcement learning milestone on the randomized stage-0 navigation task.
 
 ### Current working status
 - robot spawning works
@@ -78,7 +80,7 @@ NavBot-X has now moved beyond the initial pipeline-validation stage and achieved
 - episodic reset works
 - PPO training works
 - evaluation works
-- the robot can now solve the randomized stage-0 navigation task reliably
+- the robot can reliably solve the randomized stage-0 navigation task
 
 ### Latest RL milestone
 After PPO training on the randomized stage-0 task, evaluation reached:
@@ -89,25 +91,23 @@ After PPO training on the randomized stage-0 task, evaluation reached:
 - **Average reward:** `118.82`
 - **Average episode length:** `101.90`
 
-This means the learned policy is no longer only partially successful or dependent on one exact start-goal pair. The robot can now solve the easy randomized task with strong reliability.
+This milestone demonstrates that the robotics RL stack is functioning end-to-end and that the learned policy can solve an easy randomized navigation task with strong reliability.
 
-### What this means
-This result means:
+### What this milestone means
+This result shows:
 
-- the robotics RL stack is working end-to-end
-- the robot can reliably reach the goal on a randomized easy task
-- the project has progressed from basic integration to real policy learning
-- NavBot-X is now ready to move into the next curriculum stage
+- the robotics RL pipeline is working end-to-end
+- the robot can reach the goal reliably under randomized easy-task conditions
+- the project has progressed from simulator setup to real policy learning
+- NavBot-X now stands as a completed and presentable reinforcement learning navigation milestone
 
 This does **not** yet mean:
 
-- robust obstacle navigation is fully solved
-- the policy generalizes to all task settings
-- the project is complete
-- the system is sim-to-real ready
+- robust navigation across all difficulty levels is solved
+- full curriculum generalization has been completed
+- the project is sim-to-real ready
 
-At this stage, NavBot-X has achieved a **robust randomized stage-0 navigation milestone**.
----
+At this stage, NavBot-X is being concluded as a strong **randomized stage-0 PPO navigation milestone**, and the next phase of development will move toward higher-end simulation workflows.
 
 ## Current Learning Setup
 
@@ -180,11 +180,14 @@ navbot-x/
 
 ## Next Steps
 
-The next development stages are:
+With the core Gazebo-based reinforcement learning navigation pipeline now validated, the next phase of development will move beyond this milestone toward more advanced simulation and Physical AI workflows.
 
-1. enable curriculum progression from stage 0 to stage 1
-2. train on moderately harder randomized navigation conditions
-3. evaluate generalization under wider spawn, yaw, and goal variation
-4. move toward richer navigation settings and harder world geometry
-5. improve experiment tracking, demonstrations, and project presentation
-6. later extend the pipeline toward higher-end simulation and Physical AI workflows such as Isaac Sim / Isaac Lab / Omniverse-style RL environments
+The next development direction is:
+
+1. transition from the current Gazebo-based navigation milestone toward **Isaac Sim**
+2. explore **Isaac Lab** style reinforcement learning workflows
+3. build familiarity with **Omniverse-based simulation and digital twin environments**
+4. extend the project portfolio from basic robotics RL into more advanced Physical AI simulation stacks
+5. improve project packaging, demonstrations, and GitHub presentation for portfolio use
+
+NavBot-X will remain the foundational robotics RL project in this progression, while future work will focus on expanding into higher-end simulation environments and more industry-aligned Physical AI tooling.
