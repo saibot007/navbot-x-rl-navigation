@@ -43,7 +43,6 @@ class NavBotEnv(gym.Env):
         self.max_steps = 250
         self.current_step = 0
         self.episode_reward = 0.0
-        
 
         # LiDAR / collision settings
         self.num_lidar_bins = 12
@@ -280,32 +279,22 @@ class NavBotEnv(gym.Env):
     def _check_collision(self):
         lidar = self._process_scan()
         return float(np.min(lidar)) < self.collision_distance
-    
+
     def _update_curriculum(self):
+        # Frozen for controlled stage-0 training
         return
-
-        success_rate = sum(self.success_window) / len(self.success_window)
-
-        if self.curriculum_stage == 0 and success_rate >= 0.60:
-            self.curriculum_stage = 1
-            print("[CURRICULUM] Advanced to stage 1")
-
-        elif self.curriculum_stage == 1 and success_rate >= 0.60:
-            self.curriculum_stage = 2
-            print("[CURRICULUM] Advanced to stage 2")
-
 
     def _sample_task(self):
         if self.curriculum_stage == 0:
-            self.spawn_x = -0.55
-            self.spawn_y = 0.0
-            self.spawn_yaw = 0.0
+            self.spawn_x = float(np.random.uniform(-0.65, -0.45))
+            self.spawn_y = float(np.random.uniform(-0.08, 0.08))
+            self.spawn_yaw = float(np.random.uniform(-0.15, 0.15))
 
-            self.goal_x = 0.55
-            self.goal_y = 0.0
+            self.goal_x = float(np.random.uniform(0.45, 0.65))
+            self.goal_y = float(np.random.uniform(-0.08, 0.08))
 
-            self.goal_tolerance = 0.28
-            self.max_steps = 260
+            self.goal_tolerance = 0.26
+            self.max_steps = 280
 
         elif self.curriculum_stage == 1:
             self.spawn_x = float(np.random.uniform(-0.75, -0.55))
@@ -396,8 +385,6 @@ class NavBotEnv(gym.Env):
         linear_x = alpha_lin * self.prev_linear_x + (1.0 - alpha_lin) * raw_linear_x
         angular_z = alpha_ang * self.prev_angular_z + (1.0 - alpha_ang) * raw_angular_z
 
-        
-
         angular_change = abs(angular_z - self.prev_angular_z)
         linear_change = abs(linear_x - self.prev_linear_x)
 
@@ -447,7 +434,6 @@ class NavBotEnv(gym.Env):
         reward -= 0.02 * abs(angular_z)
         reward -= 0.04 * angular_change
         reward -= 0.01 * linear_change
-       
 
         if min_scan < self.safe_distance:
             reward -= 0.25 * (self.safe_distance - min_scan)
@@ -466,16 +452,16 @@ class NavBotEnv(gym.Env):
         odom_lin, odom_ang = self._get_robot_twist()
 
         info = {
-           "distance_to_goal": current_dist,
-           "goal_reached": goal_reached,
-           "collision": collision,
-           "min_scan": min_scan,
-           "episode_step": self.current_step,
-           "cmd_linear_x": float(linear_x),
-           "cmd_angular_z": float(angular_z),
-           "odom_linear_x": float(odom_lin),
-           "odom_angular_z": float(odom_ang),
-           "angle_to_goal": float(current_angle),
+            "distance_to_goal": current_dist,
+            "goal_reached": goal_reached,
+            "collision": collision,
+            "min_scan": min_scan,
+            "episode_step": self.current_step,
+            "cmd_linear_x": float(linear_x),
+            "cmd_angular_z": float(angular_z),
+            "odom_linear_x": float(odom_lin),
+            "odom_angular_z": float(odom_ang),
+            "angle_to_goal": float(current_angle),
         }
 
         if terminated or truncated:
@@ -491,6 +477,7 @@ class NavBotEnv(gym.Env):
                 self.success_window.pop(0)
 
             print(f"[EP END] step={self.current_step}, collision={collision}, goal={goal_reached}, truncated={truncated}")
+
         return obs, reward, terminated, truncated, info
 
     def render(self):
