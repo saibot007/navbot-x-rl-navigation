@@ -68,7 +68,7 @@ This was the key infrastructure milestone that allowed the project to move from 
 
 ## Current Status
 
-The project has now passed the initial “pipeline only” stage.
+NavBot-X has now moved beyond the initial pipeline-validation stage and achieved a strong learning milestone on the easy randomized navigation task.
 
 ### Current working status
 - robot spawning works
@@ -78,35 +78,35 @@ The project has now passed the initial “pipeline only” stage.
 - episodic reset works
 - PPO training works
 - evaluation works
-- the robot can now reach the goal in a meaningful fraction of evaluation episodes on an easy fixed task
+- the robot can now solve the randomized stage-0 navigation task reliably
 
-### First successful RL milestone
-After training PPO for **50,000 timesteps** on a fixed stage-0 navigation task, the evaluation reached:
+### Latest RL milestone
+After PPO training on the randomized stage-0 task, evaluation reached:
 
-- **Success rate:** `0.40`
-- **Collision rate:** `0.10`
-- **Truncation rate:** `0.50`
-- **Average reward:** `8.13`
-- **Average episode length:** `190.90`
+- **Success rate:** `0.90`
+- **Collision rate:** `0.00`
+- **Truncation rate:** `0.10`
+- **Average reward:** `118.82`
+- **Average episode length:** `101.90`
 
-This is the first clear sign that the learned policy is no longer only hesitating or timing out, and can now solve the simplified task with partial reliability.
+This means the learned policy is no longer only partially successful or dependent on one exact start-goal pair. The robot can now solve the easy randomized task with strong reliability.
 
-### What this does and does not mean
+### What this means
 This result means:
 
-- the robotics RL stack is genuinely working
-- the robot can learn a usable navigation policy on a simplified task
-- the project has moved beyond pure integration/debugging
+- the robotics RL stack is working end-to-end
+- the robot can reliably reach the goal on a randomized easy task
+- the project has progressed from basic integration to real policy learning
+- NavBot-X is now ready to move into the next curriculum stage
 
 This does **not** yet mean:
 
-- robust obstacle navigation is solved
-- the navigation policy generalizes broadly
-- the project is finished
+- robust obstacle navigation is fully solved
+- the policy generalizes to all task settings
+- the project is complete
 - the system is sim-to-real ready
 
-At this stage, NavBot-X has achieved its **first successful fixed-task PPO navigation milestone**.
-
+At this stage, NavBot-X has achieved a **robust randomized stage-0 navigation milestone**.
 ---
 
 ## Current Learning Setup
@@ -176,3 +176,15 @@ navbot-x/
 ├── models/
 └── README.md
 ```
+---
+
+## Next Steps
+
+The next development stages are:
+
+1. enable curriculum progression from stage 0 to stage 1
+2. train on moderately harder randomized navigation conditions
+3. evaluate generalization under wider spawn, yaw, and goal variation
+4. move toward richer navigation settings and harder world geometry
+5. improve experiment tracking, demonstrations, and project presentation
+6. later extend the pipeline toward higher-end simulation and Physical AI workflows such as Isaac Sim / Isaac Lab / Omniverse-style RL environments
